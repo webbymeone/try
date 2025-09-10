@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Simple Stock Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#0b0f19; --panel:#1a1f2e; --panel2:#243b55;
+    --tab:#16213e; --tab-active:#2b4cc2; --btn:#1e3a8a;
+    --btn-hover:#4f6ddf; --text:#e0e0e0; --subtab:#2d3c55; --subtab-active:#3e5372;
+    --badge-low:#ffcc00; --badge-full:#00cc66; --badge-out:#ff4444;
+    --row-border:#2c3353;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:"Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background:var(--bg); color:var(--text); margin:0; font-weight:bold;
+  }
+  header{ background:#111a2b; padding:20px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,.6); }
+  header h1{ margin:0; font-size:36px; color:#fff; }
+
+  /* Main tabs */
+  .tab-bar{ display:flex; justify-content:center; gap:10px; background:var(--tab); padding:10px; }
+  .tab-bar button{
+    padding:12px 20px; border:none; border-radius:12px; background:var(--btn);
+    color:#fff; font-weight:bold; cursor:pointer; min-width:130px; transition:.2s;
+  }
+  .tab-bar button.active{ background:var(--tab-active); }
+  .tab-bar button:hover{ box-shadow:0 0 8px var(--btn-hover); }
+  .tab-content{ display:none; padding:20px; }
+  .tab-content.active{ display:block; }
+
+  /* Sub tabs */
+  .sub-tab-bar{ display:flex; justify-content:center; gap:10px; margin:15px 0; background:#1b2540; padding:8px; border-radius:12px; }
+  .sub-tab-bar button{
+    padding:12px 18px; border:none; border-radius:10px; background:var(--subtab);
+    color:#fff; font-weight:bold; cursor:pointer; min-width:150px; transition:.2s;
+  }
+  .sub-tab-bar button.active{ background:var(--subtab-active); }
+  .sub-content{ display:none; }
+  .sub-content.active{ display:block; }
+
+  /* Buttons & inputs */
+  .btn{
+    background:var(--btn); color:#fff; border:none; border-radius:10px;
+    padding:10px 16px; font-weight:bold; cursor:pointer; transition:.2s;
+  }
+  .btn:hover{ box-shadow:0 0 8px var(--btn-hover); }
+  .row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; margin:10px 0 14px; }
+  .input{
+    background:#101522; border:1px solid #2c3b5e; color:#fff;
+    padding:10px 12px; border-radius:8px; min-width:200px;
+  }
+
+  /* Tables */
+  h2,h3{ text-align:center; color:#fff; margin:8px 0 12px; }
+  h2{ font-size:26px; } h3{ font-size:22px; }
+  .table-wrap{ overflow:auto; }
+  table{ width:100%; border-collapse:collapse; margin-top:12px; background:var(--panel); border-radius:12px; overflow:hidden; }
+  thead th{ background:var(--panel2); padding:12px; font-size:16px; text-align:center; }
+  tbody td{ padding:12px; font-size:14px; text-align:center; border-bottom:1px solid var(--row-border); }
+  tbody tr:hover{ background:#202742; }
+
+  /* Status badges (no glow) */
+  .badge{ display:inline-block; padding:4px 12px; border-radius:20px; border:2px solid currentColor; font-size:12px; }
+  .low{ color:var(--badge-low); }
+  .full{ color:var(--badge-full); }
+  .out{ color:var(--badge-out); }
+
+  /* Scanner */
+  .scanner{ text-align:center; margin-top:10px; }
+  .scan-box{ position:relative; display:inline-block; margin-top:14px; border-radius:12px; overflow:hidden; box-shadow:0 0 12px rgba(0,0,0,.5); }
+  video{ width:420px; max-width:92vw; background:#000; display:block; }
+  .overlay{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
+  .overlay::after{
+    content:""; position:absolute; inset:18% 16%;
+    border:2px solid #00ffd0; border-radius:10px;
+  }
+
+  /* Mobile stacked table */
+  @media (max-width: 760px){
+    table, thead, tbody, th, td, tr{ display:block; }
+    thead{ display:none; }
+    tbody tr{ margin:10px 0; background:#1b2235; border-radius:10px; padding:8px; }
+    tbody td{ border:none; display:flex; justify-content:space-between; padding:8px 10px; font-size:15px; }
+    tbody td::before{ content:attr(data-label); color:#cfd5ff; padding-right:12px; }
+  }
+</style>
+</head>
+<body>
+<header><h1>📦 Simple Stock Manager</h1></header>
+
+<!-- MAIN TABS -->
+<div class="tab-bar">
+  <button class="tab-link active" data-tab="inventory">Inventory</button>
+  <button class="tab-link" data-tab="stockin">Stock In</button>
+  <button class="tab-link" data-tab="products">Products</button>
+  <button class="tab-link" data-tab="transactions">Transactions</button>
+</div>
+
+<!-- INVENTORY -->
+<div id="inventory" class="tab-content active">
+  <h2>Inventory</h2>
+
+  <div class="row">
+    <button class="btn" onclick="exportData()">⬇️ Export Data</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)" />
+    <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Import Data</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Barcode</th>
+          <th>Target</th>
+          <th>In Stock</th>
+          <th>Need</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="invBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- STOCK IN (scanner + manual) -->
+<div id="stockin" class="tab-content">
+  <h2>Stock In</h2>
+
+  <div class="scanner">
+    <div class="scan-box" id="stockInBox">
+      <video id="stockInCam" autoplay playsinline></video>
+      <div class="overlay"></div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="startScanner('stockInCam')">Start Scanning</button>
+      <button class="btn" onclick="stopScanner('stockInCam')">Stop Camera</button>
+    </div>
+  </div>
+
+  <h3>Add by Barcode</h3>
+  <div class="row">
+    <input id="inBarcode" class="input" placeholder="Barcode (scan fills here)" />
+    <input id="inQty" type="number" class="input" placeholder="Qty (units)" />
+    <button class="btn" id="btnSimIn">Simulate Scan (In)</button>
+  </div>
+</div>
+
+<!-- PRODUCTS (sub-tabs + scanner in Add Product) -->
+<div id="products" class="tab-content">
+  <h2>Products</h2>
+  <div class="sub-tab-bar">
+    <button class="sub-tab-link active" data-sub="productList" data-parent="products">Product List</button>
+    <button class="sub-tab-link" data-sub="addProduct" data-parent="products">Add Product</button>
+  </div>
+
+  <!-- Product List -->
+  <div id="productList" class="sub-content active">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date Added</th>
+            <th>Name</th>
+            <th>Barcode</th>
+            <th>Units/Carton</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody id="prodBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add Product (with scanner) -->
+  <div id="addProduct" class="sub-content">
+    <div class="scanner">
+      <div class="scan-box" id="prodBox">
+        <video id="prodCam" autoplay playsinline></video>
+        <div class="overlay"></div>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="startScanner('prodCam')">Start Scanning</button>
+        <button class="btn" onclick="stopScanner('prodCam')">Stop Camera</button>
+      </div>
+    </div>
+
+    <h3>Add New Product</h3>
+    <div class="row">
+      <input id="pName" class="input" placeholder="Product Name" />
+      <input id="pBarcode" class="input" placeholder="Barcode (scan fills here)" />
+    </div>
+    <div class="row">
+      <input id="pUnitsPerCarton" type="number" class="input" placeholder="Units per Carton" />
+      <input id="pTargetCartons" type="number" class="input" placeholder="Target Cartons" />
+    </div>
+    <div class="row">
+      <button class="btn" id="btnAddProduct">Add Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSACTIONS (sub-tabs + scanner) -->
+<div id="transactions" class="tab-content">
+  <h2>Transactions</h2>
+  <div class="sub-tab-bar">
+    <button class="sub-tab-link active" data-sub="scanOut" data-parent="transactions">Scanner</button>
+    <button class="sub-tab-link" data-sub="viewTrans" data-parent="transactions">View Transactions</button>
+  </div>
+
+  <!-- Scanner (Stock Out) -->
+  <div id="scanOut" class="sub-content active">
+    <div class="scanner">
+      <div class="scan-box" id="outBox">
+        <video id="outCam" autoplay playsinline></video>
+        <div class="overlay"></div>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="startScanner('outCam')">Start Scanning</button>
+        <button class="btn" onclick="stopScanner('outCam')">Stop Camera</button>
+      </div>
+    </div>
+
+    <h3>Sell by Barcode</h3>
+    <div class="row">
+      <input id="outBarcode" class="input" placeholder="Barcode (scan fills here)" />
+      <input id="outQty" type="number" class="input" placeholder="Qty (units)" />
+      <button class="btn" id="btnSimOut">Simulate Scan (Out)</button>
+    </div>
+  </div>
+
+  <!-- View Transactions -->
+  <div id="viewTrans" class="sub-content">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Product</th>
+            <th>Barcode</th>
+            <th>Sold</th>
+          </tr>
+        </thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Beep (generated with WebAudio) -->
+<script>
+  const playBeep = () => {
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = 950;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+      o.start(); o.stop(ctx.currentTime + 0.16);
+    }catch(e){}
+  };
+
+  /* ===== Date format: "10-Sep-2025 14:32" ===== */
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const ts = (d=new Date())=>{
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = months[d.getMonth()];
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mi = String(d.getMinutes()).padStart(2,'0');
+    return `${dd}-${mm}-${yyyy} ${hh}:${mi}`;
+  };
+
+  /* ===== Storage ===== */
+  let products = [
+    { name:"Milk 1L", barcode:"1111111111111", unitsPerCarton:12, targetCartons:2, currentUnits:18, dateAdded: ts() },
+    { name:"Rice 5kg", barcode:"2222222222222", unitsPerCarton:10, targetCartons:2, currentUnits:20, dateAdded: ts() },
+    { name:"Chips Family Pack", barcode:"3333333333333", unitsPerCarton:6,  targetCartons:2, currentUnits:0,  dateAdded: ts() },
+  ];
+  let transactions = [
+    { date: ts(), product:"Milk 1L", barcode:"1111111111111", qtyUnits:4 },
+    { date: ts(), product:"Chips Family Pack", barcode:"3333333333333", qtyUnits:6 },
+  ];
+
+  const loadFromLS = ()=>{
+    const p = localStorage.getItem('products');
+    const t = localStorage.getItem('transactions');
+    if (p) { try{ products = JSON.parse(p)||products; }catch{} }
+    if (t) { try{ transactions = JSON.parse(t)||transactions; }catch{} }
+  };
+  const saveToLS = ()=>{
+    localStorage.setItem('products', JSON.stringify(products));
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+  };
+  loadFromLS();
+
+  /* ===== Helpers ===== */
+  const toUnits = (cartons, upc) => cartons * upc;
+  const fmtUnits = (units, upc) => {
+    if (units <= 0) return "0";
+    const c = Math.floor(units / upc);
+    const r = units % upc;
+    if (c>0 && r>0) return `${c} carton${c>1?'s':''} ${r} unit${r>1?'s':''}`;
+    if (c>0 && r===0) return `${c} carton${c>1?'s':''}`;
+    return `${r} unit${r>1?'s':''}`;
+  };
+  const statusOf = (curr, target) => curr<=0 ? "out" : (curr>=target ? "full" : "low");
+
+  /* ===== Rendering ===== */
+  function renderInventory(){
+    const tbody = document.getElementById('invBody');
+    tbody.innerHTML = products.map(p=>{
+      const targetU = toUnits(p.targetCartons, p.unitsPerCarton);
+      const needU = Math.max(0, targetU - p.currentUnits);
+      const st = statusOf(p.currentUnits, targetU);
+      return `<tr>
+        <td data-label="Product">${p.name}</td>
+        <td data-label="Barcode">${p.barcode}</td>
+        <td data-label="Target">${p.targetCartons} carton${p.targetCartons>1?'s':''}</td>
+        <td data-label="In Stock">${fmtUnits(p.currentUnits, p.unitsPerCarton)}</td>
+        <td data-label="Need">${fmtUnits(needU, p.unitsPerCarton)}</td>
+        <td data-label="Status"><span class="badge ${st}">${st.toUpperCase()}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderProducts(){
+    const tbody = document.getElementById('prodBody');
+    tbody.innerHTML = products.map(p=>`
+      <tr>
+        <td data-label="Date Added">${p.dateAdded}</td>
+        <td data-label="Name">${p.name}</td>
+        <td data-label="Barcode">${p.barcode}</td>
+        <td data-label="Units/Carton">${p.unitsPerCarton}</td>
+        <td data-label="Target">${p.targetCartons} carton${p.targetCartons>1?'s':''} (${toUnits(p.targetCartons,p.unitsPerCarton)} units)</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderTransactions(){
+    const tbody = document.getElementById('txBody');
+    tbody.innerHTML = transactions.map(t=>{
+      const p = products.find(x=>x.barcode===t.barcode);
+      const friendly = p ? fmtUnits(t.qtyUnits, p.unitsPerCarton) : `${t.qtyUnits} units`;
+      return `<tr>
+        <td data-label="Date & Time">${t.date}</td>
+        <td data-label="Product">${t.product}</td>
+        <td data-label="Barcode">${t.barcode}</td>
+        <td data-label="Sold">${friendly}</td>
+      </tr>`;
+    }).join('');
+  }
+  function renderAll(){ renderInventory(); renderProducts(); renderTransactions(); }
+  renderAll();
+
+  /* ===== Export / Import ===== */
+  function exportData(){
+    const data = { products, transactions };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=`stock-data-${Date.now()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importData(ev){
+    const f = ev.target.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = e=>{
+      try{
+        const obj = JSON.parse(e.target.result);
+        if (!Array.isArray(obj.products) || !Array.isArray(obj.transactions)) { alert("Invalid file."); return; }
+        products = obj.products; transactions = obj.transactions;
+        saveToLS(); renderAll(); alert("Import successful.");
+      }catch(err){ alert("Failed to import: "+err.message); }
+    };
+    rd.readAsText(f);
+  }
+  window.exportData = exportData; window.importData = importData;
+
+  /* ===== Simulate Scan Actions ===== */
+  document.getElementById('btnSimIn').addEventListener('click', ()=>{
+    const code = document.getElementById('inBarcode').value.trim();
+    const qty = parseInt(document.getElementById('inQty').value,10)||0;
+    if (!code || qty<=0) { alert("Enter barcode and a positive quantity (units)."); return; }
+    const p = products.find(x=>x.barcode===code);
+    if (!p) { alert("Product not found. Add it first in Products > Add Product."); return; }
+    p.currentUnits += qty;
+    saveToLS(); renderAll(); playBeep();
+    document.getElementById('inQty').value='';
+  });
+
+  document.getElementById('btnSimOut').addEventListener('click', ()=>{
+    const code = document.getElementById('outBarcode').value.trim();
+    const qty = parseInt(document.getElementById('outQty').value,10)||0;
+    if (!code || qty<=0) { alert("Enter barcode and a positive quantity (units)."); return; }
+    const p = products.find(x=>x.barcode===code);
+    if (!p) { alert("Product not found. Add it first in Products > Add Product."); return; }
+    p.currentUnits = Math.max(0, p.currentUnits - qty);
+    transactions.unshift({ date: ts(), product:p.name, barcode:p.barcode, qtyUnits:qty });
+    saveToLS(); renderAll(); playBeep();
+    document.getElementById('outQty').value='';
+  });
+
+  document.getElementById('btnAddProduct').addEventListener('click', ()=>{
+    const name = document.getElementById('pName').value.trim();
+    const barcode = document.getElementById('pBarcode').value.trim();
+    const upc = parseInt(document.getElementById('pUnitsPerCarton').value,10)||0;
+    const tgt = parseInt(document.getElementById('pTargetCartons').value,10)||0;
+    if (!name || !barcode || upc<=0 || tgt<=0){ alert("Fill all fields with valid numbers."); return; }
+    if (products.some(x=>x.barcode===barcode)){ alert("Barcode already exists."); return; }
+    products.unshift({ name, barcode, unitsPerCarton:upc, targetCartons:tgt, currentUnits:0, dateAdded: ts() });
+    saveToLS(); renderAll(); playBeep();
+    document.getElementById('pName').value=''; document.getElementById('pBarcode').value='';
+    document.getElementById('pUnitsPerCarton').value=''; document.getElementById('pTargetCartons').value='';
+  });
+
+  /* ===== Cameras (independent, with auto-stop on tab/sub-tab switch) ===== */
+  const activeStreams = {};
+  function startScanner(videoId){
+    stopScanner(videoId);
+    const video = document.getElementById(videoId);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert("Camera API not supported. Use Simulate Scan."); return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode:"environment" } })
+      .then(stream=>{
+        video.srcObject = stream; activeStreams[videoId] = stream;
+
+        // Optional: fill inputs when BarcodeDetector is available
+        if ('BarcodeDetector' in window){
+          let det;
+          try{ det = new BarcodeDetector({formats:['ean_13','ean_8','code_128','upc_a','upc_e']}); }catch{ det=null; }
+          if (det){
+            const tick = async ()=>{
+              if (!activeStreams[videoId]) return;
+              try{
+                const codes = await det.detect(video);
+                if (codes && codes.length){
+                  const code = codes[0].rawValue || '';
+                  if (videoId==='stockInCam') document.getElementById('inBarcode').value = code;
+                  if (videoId==='outCam')     document.getElementById('outBarcode').value = code;
+                  if (videoId==='prodCam')    document.getElementById('pBarcode').value  = code;
+                  playBeep();
+                }
+              }catch(e){}
+              requestAnimationFrame(tick);
+            };
+            tick();
+          }
+        }
+      })
+      .catch(err=> alert("Camera not available: " + err.message));
+  }
+  function stopScanner(videoId){
+    if (activeStreams[videoId]){
+      activeStreams[videoId].getTracks().forEach(t=>t.stop());
+      delete activeStreams[videoId];
+    }
+    const v = document.getElementById(videoId); if (v) v.srcObject = null;
+  }
+  window.startScanner = startScanner; window.stopScanner = stopScanner;
+
+  /* Auto-stop when switching main tabs & sub-tabs */
+  const stopAllCams = ()=>['stockInCam','outCam','prodCam'].forEach(stopScanner);
+
+  document.querySelectorAll('.tab-link').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-link').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+      stopAllCams();
+    });
+  });
+
+  document.querySelectorAll('.sub-tab-link').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const parent = btn.dataset.parent;
+      const sub = btn.dataset.sub;
+      document.querySelectorAll(`#${parent} .sub-tab-link`).forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll(`#${parent} .sub-content`).forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(sub).classList.add('active');
+      stopAllCams();
+    });
+  });
+</script>
+</body>
+</html>
